@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+joblib
+matplotlib
+seaborn
+streamlit
+folium
+streamlit-folium
+geopy
+fastapi
+uvicorn
+pydantic

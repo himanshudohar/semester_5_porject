@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JalDrishti – Groundwater check before drilling</title>
+<meta name="description" content="Search a village or tap the map to see how likely groundwater is before you drill a borewell.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Hind:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --night:#04181f; --deep:#0a2f3a; --teal:#0f5c6e; --water:#27b5d6; --foam:#c4ecf6;
+  --marigold:#f2b441; --marigold-d:#d9962a;
+  --paper:#f1f6f5; --card:#ffffff; --ink:#0d2a31; --muted:#4f6a70; --line:#d3e0de;
+  --s1:#7a5a3c; --s2:#98774f; --s3:#7d7a70; --s4:#4d5a63; --s5:#36444d;
+  --low:#b3412b; --low-bg:#f8e2db; --mid:#8f6307; --mid-bg:#f8ebc9; --high:#0b6f53; --high-bg:#d4efe4;
+  --head:"Familjen Grotesk","Hind",system-ui,sans-serif; --body:"Hind",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--body);font-size:17px;line-height:1.55;color:var(--ink);background:var(--paper)}
+h1,h2,h3,p{margin:0}
+h1,h2,h3{font-family:var(--head);letter-spacing:-.015em}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--marigold);outline-offset:2px}
+.wrap{width:min(1180px,100% - 40px);margin-inline:auto}
+.sr{position:absolute;left:-9999px}
+
+/* ---------- header ---------- */
+header.top{position:absolute;inset:0 0 auto 0;z-index:20;color:#fff}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand b{font:700 24px var(--head);letter-spacing:-.02em}
+.brand small{opacity:.7;font-size:15px}
+nav{display:flex;align-items:center;gap:22px}
+nav a{text-decoration:none;opacity:.85;font-size:16px}
+nav a:hover{opacity:1;text-decoration:underline;text-underline-offset:4px}
+.lang{font:600 15px var(--body);color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:6px 14px;cursor:pointer}
+.lang:hover{background:rgba(255,255,255,.2)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;color:#fff;background:
+  radial-gradient(900px 500px at 78% 30%,rgba(39,181,214,.22),transparent 60%),
+  linear-gradient(180deg,var(--night),var(--deep));
+  padding:120px 0 70px;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:40px;align-items:center}
+.hero h1{font-size:clamp(2.3rem,5vw,4.1rem);line-height:1.03;font-weight:700;max-width:14ch}
+html[lang="hi"] .hero h1{line-height:1.22;font-size:clamp(2rem,4.3vw,3.4rem);max-width:16ch}
+.hero .lead{margin-top:18px;font-size:19px;max-width:46ch;color:#cfe3e7}
+.sform{display:flex;gap:8px;background:#fff;border-radius:16px;padding:7px;box-shadow:0 14px 40px rgba(0,0,0,.35);margin-top:28px;max-width:560px}
+.sform input{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ink);padding:10px 12px;border-radius:10px}
+.sform input:focus{outline:none}
+.sform:focus-within{box-shadow:0 0 0 3px var(--marigold),0 14px 40px rgba(0,0,0,.35)}
+.btn{font:600 17px var(--body);cursor:pointer;border:0;border-radius:11px;padding:11px 22px;background:var(--marigold);color:#2a1d00}
+.btn:hover{background:var(--marigold-d)}
+.btn:disabled{opacity:.6;cursor:wait}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;align-items:center}
+.chips span{color:#9fbcc2;font-size:15px}
+.chip,.ghost{font:500 15px var(--body);cursor:pointer;border-radius:999px;padding:6px 14px;background:transparent;color:#e3f1f4;border:1px solid rgba(255,255,255,.28)}
+.chip:hover{background:rgba(255,255,255,.12)}
+.free{margin-top:20px;color:#9fbcc2;font-size:15px}
+
+/* hero illustration */
+.cross{width:100%;height:auto;display:block;filter:drop-shadow(0 20px 40px rgba(0,0,0,.35))}
+.bore{transform-box:fill-box;transform-origin:50% 0;animation:drill 1.5s cubic-bezier(.3,.7,.2,1) both}
+.aq{animation:rise 2.6s .9s cubic-bezier(.2,.8,.2,1) both}
+@keyframes drill{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes rise{from{transform:translateY(95px)}to{transform:translateY(0)}}
+
+/* ---------- app (map + result) ---------- */
+#app{padding:56px 0 64px;scroll-margin-top:10px}
+.app-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(340px,.9fr);gap:24px;align-items:start}
+.mapbox{position:sticky;top:16px;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:0 10px 30px rgba(13,42,49,.12);background:#dfeae8}
+#map{height:min(680px,calc(100vh - 32px));min-height:420px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 10px 30px rgba(13,42,49,.08)}
+.panel .sform{box-shadow:none;border:1.5px solid var(--line);margin-top:0;padding:5px;max-width:none;border-radius:13px}
+.panel .sform:focus-within{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,92,110,.15)}
+.panel .btn{background:var(--deep);color:#fff;padding:10px 18px}
+.panel .btn:hover{background:var(--teal)}
+.panel .row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.panel .ghost{color:var(--deep);border-color:var(--line);padding:6px 14px}
+.panel .ghost:hover{background:var(--paper);border-color:var(--teal)}
+.panel .hint{color:var(--muted);font-size:15px}
+#state{margin-top:22px}
+.empty{border:1.5px dashed var(--line);border-radius:14px;padding:22px;color:var(--muted)}
+.err{background:var(--low-bg);color:#6e2415;border-radius:12px;padding:14px 16px}
+.where h2{font-size:23px;line-height:1.15}
+.where p{margin-top:4px;color:var(--muted);font-size:15px;overflow-wrap:anywhere}
+
+.result{display:grid;grid-template-columns:150px minmax(0,1fr);gap:22px;margin-top:20px;align-items:center}
+.pwrap{position:relative;width:150px;height:300px}
+.profile{position:absolute;inset:0;border-radius:14px;overflow:hidden;
+  background:linear-gradient(to bottom,var(--s1) 0 18%,var(--s2) 18% 36%,var(--s3) 36% 56%,var(--s4) 56% 78%,var(--s5) 78% 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.hole{position:absolute;left:62px;width:26px;top:0;bottom:0;background:var(--night);overflow:hidden}
+.wat{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(var(--foam),var(--water) 12%,var(--teal));transition:height 1.1s cubic-bezier(.2,.8,.2,1)}
+.lvl{position:absolute;left:0;right:0;border-top:2px dashed rgba(255,255,255,.7)}
+.lvl i{position:absolute;left:7px;bottom:3px;font:600 12px var(--body);font-style:normal;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.badge{display:inline-block;font:700 26px var(--head);padding:5px 14px;border-radius:11px}
+.badge.Low{background:var(--low-bg);color:var(--low)}
+.badge.Medium{background:var(--mid-bg);color:var(--mid)}
+.badge.High{background:var(--high-bg);color:var(--high)}
+.pct{font:700 54px var(--head);letter-spacing:-.035em;line-height:1;margin-top:12px}
+.pct small{display:block;font:500 15.5px var(--body);letter-spacing:0;color:var(--muted);margin-top:6px;max-width:22ch}
+.notice{margin-top:18px;padding:12px 14px;border-radius:12px;font-size:15px}
+.notice.warn{background:var(--mid-bg);color:#5a3d03}
+.notice.info{background:#e1eef2;color:#0c3d4e}
+h3.sec{font-size:18px;margin:24px 0 10px}
+.factors{list-style:none;padding:0;margin:0;display:grid;gap:11px}
+.factors li{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:15.5px}
+.factors .v{color:var(--muted)}
+.factors .bar{grid-column:1/-1;height:7px;border-radius:4px;background:#e4eceb;overflow:hidden}
+.factors .bar i{display:block;height:100%;background:var(--teal);border-radius:4px}
+.next{margin:0;padding-left:20px}.next li{margin:5px 0}
+.legal{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:14.5px}
+
+/* leaflet marker */
+.pin{width:22px;height:22px;border-radius:50%;background:var(--marigold);border:4px solid var(--night);box-shadow:0 0 0 6px rgba(242,180,65,.35)}
+
+/* ---------- how it works ---------- */
+.how{padding:30px 0 70px}
+.how h2,.limits h2{font-size:clamp(1.7rem,3.2vw,2.5rem);line-height:1.1;max-width:20ch}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:34px;counter-reset:s;border-top:2px solid var(--ink)}
+.step{padding:22px 26px 0 0;counter-increment:s;position:relative}
+.step::before{content:counter(s);position:absolute;top:-17px;left:0;width:32px;height:32px;border-radius:50%;background:var(--ink);color:#fff;font:700 16px var(--head);display:grid;place-items:center}
+.step h3{font-size:21px;margin-top:14px}
+.step p{margin-top:8px;color:var(--muted);max-width:34ch}
+
+/* ---------- limits ---------- */
+.limits{background:var(--night);color:#e5f1f3;padding:64px 0}
+.limits .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:44px;align-items:start}
+.limits ul{margin:0;padding:0;list-style:none;display:grid;gap:16px}
+.limits li{padding-left:34px;position:relative;color:#cfe3e7}
+.limits li::before{content:"";position:absolute;left:0;top:7px;width:18px;height:18px;border-radius:50%;border:2px solid var(--marigold)}
+.limits li b{color:#fff;font-weight:600}
+footer{background:#02100f;color:#8fa9ae;padding:22px 0;font-size:14.5px}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  .hero{padding-top:100px}
+  .hero .wrap{grid-template-columns:1fr}
+  .hero h1{max-width:none}
+  .cross{max-width:440px;margin:0 auto}
+  .app-grid{grid-template-columns:1fr}
+  .mapbox{position:relative;top:0;order:2}
+  #map{height:420px;min-height:0}
+  .steps{grid-template-columns:1fr;border-top:0;border-left:2px solid var(--ink);margin-left:16px}
+  .step{padding:0 0 26px 30px}
+  .step::before{top:0;left:-17px}
+  .step h3{margin-top:0}
+  .limits .wrap{grid-template-columns:1fr}
+  nav a{display:none}
+}
+@media (max-width:480px){
+  .result{grid-template-columns:120px 1fr;gap:14px}
+  .pwrap{width:120px;height:250px}.hole{left:47px}
+  .pct{font-size:44px}.badge{font-size:22px}
+  .sform{flex-wrap:wrap}.sform input{flex-basis:100%}.sform .btn{flex:1}
+}
+@media (prefers-reduced-motion:reduce){
+  .bore,.aq{animation:none}.wat{transition:none}html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="JalDrishti home">
+      <svg width="32" height="32" viewBox="0 0 34 34" aria-hidden="true"><rect x="11" y="2" width="12" height="30" rx="3.5" fill="#98774f"/><rect x="14" y="4" width="6" height="26" rx="2" fill="#04181f"/><rect x="14" y="16" width="6" height="14" rx="2" fill="#27b5d6"/></svg>
+      <b>JalDrishti</b> <small>जलदृष्टि</small>
+    </a>
+    <nav>
+      <a href="#how" data-i18n="nav_how">How it works</a>
+      <a href="#limits" data-i18n="nav_limits">Limits</a>
+      <button class="lang" id="lang" type="button" aria-label="Change language">हिंदी</button>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <h1 data-i18n="h1">Know what's under your land before you drill.</h1>
+      <p class="lead" data-i18n="lead">Enter a village or tap the map. JalDrishti estimates how likely groundwater is at that spot, so you can plan before you spend on a borewell.</p>
+
+      <form class="sform" autocomplete="off">
+        <label class="sr" for="q1" data-i18n="ph">Village, town or address</label>
+        <input id="q1" type="search" data-i18n-ph="ph" placeholder="Village, town or address">
+        <button class="btn" type="submit" data-i18n="check">Check</button>
+      </form>
+      <div class="chips">
+        <span data-i18n="try">Try</span>
+        <button class="chip" type="button" data-q="Ujjain, Madhya Pradesh">Ujjain</button>
+        <button class="chip" type="button" data-q="Indore, Madhya Pradesh">Indore</button>
+        <button class="chip" type="button" data-q="Dewas, Madhya Pradesh">Dewas</button>
+        <button class="chip" type="button" data-q="Ratlam, Madhya Pradesh">Ratlam</button>
+      </div>
+      <p class="free" data-i18n="free">Free to use. No sign-up.</p>
+    </div>
+
+    <svg class="cross" viewBox="0 0 480 520" role="img" aria-label="Cross-section of the ground with a borewell reaching a water-bearing rock layer">
+      <defs>
+        <clipPath id="clipQ"><rect x="0" y="405" width="480" height="115" rx="0"/></clipPath>
+        <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#27b5d6"/><stop offset="1" stop-color="#0f5c6e"/></linearGradient>
+      </defs>
+      <!-- sky + rig -->
+      <g stroke="#c4ecf6" stroke-width="3" fill="none" stroke-linecap="round" opacity=".9">
+        <path d="M242 112 L222 52 L262 52 Z"/><path d="M232 82 H252"/><path d="M242 52 V30"/>
+      </g>
+      <!-- strata: each deeper layer overlaps the one above, so no gaps -->
+      <path d="M0 112 Q120 98 240 112 T480 108 V520 H0 Z" fill="#7a5a3c"/>
+      <path d="M0 176 Q120 188 240 170 T480 172 V520 H0 Z" fill="#98774f"/>
+      <path d="M0 260 Q120 272 240 254 T480 256 V520 H0 Z" fill="#7d7a70"/>
+      <path d="M0 346 Q120 356 240 340 T480 342 V520 H0 Z" fill="#4d5a63"/>
+      <rect x="0" y="404" width="480" height="116" fill="#36444d"/>
+      <g clip-path="url(#clipQ)"><rect class="aq" x="0" y="405" width="480" height="115" fill="url(#wg)" opacity=".85"/></g>
+      <path d="M0 404 H480" stroke="#c4ecf6" stroke-width="2" stroke-dasharray="7 6" opacity=".8"/>
+      <!-- cracks in rock -->
+      <g stroke="#10181d" stroke-width="2" fill="none" opacity=".45">
+        <path d="M60 350 l14 22 l-8 20"/><path d="M120 360 l-10 18 l12 24"/><path d="M360 352 l12 20 l-6 24"/><path d="M420 358 l-12 22 l10 22"/>
+      </g>
+      <!-- borehole -->
+      <rect class="bore" x="236" y="112" width="12" height="372" fill="#04181f"/>
+      <g clip-path="url(#clipQ)"><rect class="aq" x="236" y="405" width="12" height="115" fill="#27b5d6"/></g>
+      <!-- labels -->
+      <g font-family="Hind,sans-serif" font-size="14" fill="#fff" opacity=".92">
+        <text x="270" y="148">Topsoil</text>
+        <text x="270" y="222">Murram</text>
+        <text x="270" y="306">Weathered rock</text>
+        <text x="270" y="384">Hard rock</text>
+        <text x="270" y="448" font-weight="600" fill="#c4ecf6">Water-bearing fractures</text>
+        <text x="20" y="400" font-size="13" fill="#c4ecf6">water table</text>
+        <text x="20" y="132" font-size="13" fill="#c4ecf6">0 m</text>
+        <text x="20" y="270" font-size="13" fill="#e8dcc7">40 m</text>
+        <text x="20" y="500" font-size="13" fill="#c4ecf6">120 m</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section id="app">
+  <div class="wrap app-grid">
+    <div class="mapbox"><div id="map" role="application" aria-label="Map"></div></div>
+
+    <div class="panel">
+      <form class="sform" autocomplete="off">
+        <label class="sr" for="q2" data-i18n="ph">Village, town or address</label>
+        <input id="q2" type="search" data-i18n-ph="ph" placeholder="Village, town or address">
+        <button class="btn" type="submit" data-i18n="check">Check</button>
+      </form>
+      <div class="row">
+        <button class="ghost" type="button" id="loc" data-i18n="myloc">Use my location</button>
+        <span class="hint" data-i18n="tap">or tap any point on the map</span>
+      </div>
+      <div id="state" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section class="how" id="how">
+  <div class="wrap">
+    <h2 data-i18n="how_h">From a place name to a clear answer in three steps</h2>
+    <div class="steps">
+      <div class="step"><h3 data-i18n="s1h">Pick your spot</h3><p data-i18n="s1p">Search a village or tap the exact field on the map.</p></div>
+      <div class="step"><h3 data-i18n="s2h">We read the land</h3><p data-i18n="s2p">The model looks at rock, soil, slope, rainfall, streams and how nearby wells performed.</p></div>
+      <div class="step"><h3 data-i18n="s3h">You get a likelihood</h3><p data-i18n="s3p">Low, Medium or High, with the main reasons. It is an estimate, not a promise.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="limits" id="limits">
+  <div class="wrap">
+    <h2 data-i18n="lim_h">What this tool cannot tell you</h2>
+    <ul>
+      <li><b data-i18n="l1b">It cannot promise water.</b> <span data-i18n="l1p">A High result means conditions look favourable, not that every borewell will succeed.</span></li>
+      <li><b data-i18n="l2b">It does not know depth or yield.</b> <span data-i18n="l2p">How deep to drill and how much water you will get needs an on-site survey.</span></li>
+      <li><b data-i18n="l3b">Get a survey first.</b> <span data-i18n="l3p">Ask a hydrogeologist and book a resistivity survey at the exact spot before you drill.</span></li>
+    </ul>
+  </div>
+</section>
+
+<footer><div class="wrap" data-i18n="foot">JalDrishti is a decision-support project. Map data © OpenStreetMap contributors.</div></footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const T_MID = 0.40, T_HIGH = 0.65;           // keep in sync with config.py
+
+const STR = {
+ en:{nav_how:"How it works",nav_limits:"Limits",
+  h1:"Know what's under your land before you drill.",
+  lead:"Enter a village or tap the map. JalDrishti estimates how likely groundwater is at that spot, so you can plan before you spend on a borewell.",
+  ph:"Village, town or address",check:"Check",checking:"Checking…",try:"Try",free:"Free to use. No sign-up.",
+  myloc:"Use my location",tap:"or tap any point on the map",
+  empty:"Search a place or tap the map. The result shows how likely groundwater is at that spot.",
+  loading:"Checking this location…",selected:"Selected point",
+  Low:"Low",Medium:"Medium",High:"High",potential:"potential",
+  chance:"chance of usable water at this point",
+  demo:"Demo mode. The model was trained on made-up data. Do not use this result for a real drilling decision.",
+  placeholder:"There are no well records near this point, so this is only a generic average. It says nothing useful about this spot.",
+  nearby:"Land details here are estimated from the {n} nearest wells (closest {km} km away), not measured at this exact spot.",
+  factors:"What mattered most to the model",before:"Before you drill",
+  n1:"Ask a hydrogeologist to visit the site.",n2:"Get a geophysical survey (resistivity) done at the exact spot.",n3:"Ask neighbours about their wells' depth and yield.",
+  disclaimer:"This is a groundwater potential estimate, not a guarantee. Consult a qualified hydrogeologist or geophysical survey before drilling.",
+  notfound:"We could not find that place. Add the district or state, or tap the spot on the map.",
+  nogeo:"This browser cannot share your location. Search by village name instead.",
+  denied:"Location permission was denied. Search by village name or tap the map.",
+  generic:"Something went wrong. Try again.",
+  how_h:"From a place name to a clear answer in three steps",
+  s1h:"Pick your spot",s1p:"Search a village or tap the exact field on the map.",
+  s2h:"We read the land",s2p:"The model looks at rock, soil, slope, rainfall, streams and how nearby wells performed.",
+  s3h:"You get a likelihood",s3p:"Low, Medium or High, with the main reasons. It is an estimate, not a promise.",
+  lim_h:"What this tool cannot tell you",
+  l1b:"It cannot promise water.",l1p:"A High result means conditions look favourable, not that every borewell will succeed.",
+  l2b:"It does not know depth or yield.",l2p:"How deep to drill and how much water you will get needs an on-site survey.",
+  l3b:"Get a survey first.",l3p:"Ask a hydrogeologist and book a resistivity survey at the exact spot before you drill.",
+  foot:"JalDrishti is a decision-support project. Map data © OpenStreetMap contributors.",
+  langbtn:"हिंदी",
+  f:{rainfall:"Rainfall",elevation:"Elevation",slope:"Ground slope",dist_stream:"Distance to stream",drainage_density:"Drainage density",ndvi:"Vegetation greenness",nearby_well_success_rate:"Nearby wells that found water",nearby_well_avg_depth:"Depth of nearby wells",soil:"Soil type",geology:"Rock type",landcover:"Land use"}},
+ hi:{nav_how:"कैसे काम करता है",nav_limits:"सीमाएँ",
+  h1:"ड्रिल करने से पहले जानिए, ज़मीन के नीचे क्या है।",
+  lead:"गाँव का नाम लिखें या नक्शे पर छुएँ। जलदृष्टि बताता है कि उस जगह पानी मिलने की कितनी संभावना है, ताकि बोरवेल पर ख़र्च से पहले आप योजना बना सकें।",
+  ph:"गाँव, कस्बा या पता",check:"जाँचें",checking:"जाँच रहे हैं…",try:"आज़माएँ",free:"मुफ़्त। साइन-अप की ज़रूरत नहीं।",
+  myloc:"मेरी लोकेशन",tap:"या नक्शे पर कोई जगह छुएँ",
+  empty:"कोई जगह खोजें या नक्शे पर छुएँ। नतीजा बताएगा कि वहाँ पानी की संभावना कितनी है।",
+  loading:"इस जगह की जाँच हो रही है…",selected:"चुनी हुई जगह",
+  Low:"कम",Medium:"मध्यम",High:"अधिक",potential:"संभावना",
+  chance:"इस जगह पर उपयोगी पानी मिलने की संभावना",
+  demo:"डेमो मोड। मॉडल नकली आँकड़ों पर बना है। इस नतीजे पर बोरवेल का फ़ैसला न लें।",
+  placeholder:"इस जगह के पास कुओं का कोई रिकॉर्ड नहीं है, इसलिए यह सिर्फ़ एक सामान्य औसत है। इस जगह के बारे में यह कुछ नहीं बताता।",
+  nearby:"यहाँ की ज़मीन के आँकड़े पास के {n} कुओं (सबसे नज़दीकी {km} किमी दूर) से अनुमानित हैं, ठीक इसी जगह पर मापे नहीं गए।",
+  factors:"मॉडल ने किन बातों को सबसे ज़्यादा देखा",before:"ड्रिल करने से पहले",
+  n1:"किसी भू-जल विशेषज्ञ (हाइड्रोजियोलॉजिस्ट) से साइट दिखवाएँ।",n2:"ठीक उसी जगह रेज़िस्टिविटी (भू-भौतिकीय) सर्वे करवाएँ।",n3:"पड़ोसियों से उनके बोरवेल की गहराई और पानी की मात्रा पूछें।",
+  disclaimer:"यह भू-जल की संभावना का अनुमान है, गारंटी नहीं। ड्रिल करने से पहले योग्य हाइड्रोजियोलॉजिस्ट या भू-भौतिकीय सर्वे की सलाह लें।",
+  notfound:"वह जगह नहीं मिली। ज़िला या राज्य जोड़ें, या नक्शे पर जगह छुएँ।",
+  nogeo:"यह ब्राउज़र आपकी लोकेशन साझा नहीं कर सकता। गाँव का नाम लिखकर खोजें।",
+  denied:"लोकेशन की अनुमति नहीं मिली। गाँव का नाम लिखें या नक्शे पर छुएँ।",
+  generic:"कुछ गड़बड़ हो गई। फिर कोशिश करें।",
+  how_h:"जगह के नाम से साफ़ जवाब तक, तीन कदम में",
+  s1h:"अपनी जगह चुनें",s1p:"गाँव खोजें या नक्शे पर अपना खेत छुएँ।",
+  s2h:"हम ज़मीन को पढ़ते हैं",s2p:"मॉडल चट्टान, मिट्टी, ढलान, बारिश, नदी-नालों और पास के कुओं के नतीजे देखता है।",
+  s3h:"आपको संभावना मिलती है",s3p:"कम, मध्यम या अधिक, मुख्य कारणों के साथ। यह अनुमान है, वादा नहीं।",
+  lim_h:"यह टूल क्या नहीं बता सकता",
+  l1b:"यह पानी का वादा नहीं करता।",l1p:"“अधिक” का मतलब है हालात अनुकूल दिखते हैं, यह नहीं कि हर बोरवेल सफल होगा।",
+  l2b:"इसे गहराई और पानी की मात्रा नहीं पता।",l2p:"कितना गहरा खोदना है और कितना पानी मिलेगा, इसके लिए मौके पर सर्वे चाहिए।",
+  l3b:"पहले सर्वे करवाएँ।",l3p:"ड्रिल से पहले हाइड्रोजियोलॉजिस्ट से मिलें और ठीक उसी जगह रेज़िस्टिविटी सर्वे करवाएँ।",
+  foot:"जलदृष्टि एक निर्णय-सहायता परियोजना है। नक्शा © OpenStreetMap योगदानकर्ता।",
+  langbtn:"English",
+  f:{rainfall:"बारिश",elevation:"ऊँचाई",slope:"ज़मीन की ढलान",dist_stream:"नाले से दूरी",drainage_density:"जल-निकासी घनत्व",ndvi:"हरियाली",nearby_well_success_rate:"पास के कितने कुओं में पानी मिला",nearby_well_avg_depth:"पास के कुओं की गहराई",soil:"मिट्टी का प्रकार",geology:"चट्टान का प्रकार",landcover:"भूमि उपयोग"}}
+};
+
+let lang = "en";
+try { const s = localStorage.getItem("jd_lang"); if (s === "hi" || s === "en") lang = s; } catch(e){}
+const t = k => (STR[lang][k] ?? STR.en[k] ?? k);
+let last = null;
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function fmt(v){return typeof v==="number"?(Number.isInteger(v)?v:v.toFixed(2)):(v??"–")}
+
+function applyLang(){
+  document.documentElement.lang = lang;
+  $$("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  $$("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  $("#lang").textContent = t("langbtn");
+  if (last) render(last, false); else renderEmpty();
+}
+$("#lang").addEventListener("click", () => {
+  lang = lang === "en" ? "hi" : "en";
+  try { localStorage.setItem("jd_lang", lang); } catch(e){}
+  applyLang();
+});
+
+/* ---------- map ---------- */
+const map = L.map("map",{scrollWheelZoom:false}).setView([23.1765,75.7885],11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom:19,attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+map.on("focus",()=>map.scrollWheelZoom.enable());
+map.on("blur",()=>map.scrollWheelZoom.disable());
+const pinIcon = L.divIcon({className:"",html:'<div class="pin"></div>',iconSize:[22,22],iconAnchor:[11,11]});
+let marker = null;
+map.on("click", e => run({lat:e.latlng.lat, lon:e.latlng.lng}, false));
+
+/* ---------- inputs ---------- */
+$$(".sform").forEach(f => f.addEventListener("submit", e => {
+  e.preventDefault();
+  const v = f.querySelector("input").value.trim();
+  if (v) { $$(".sform input").forEach(i => i.value = v); run({address:v}, true); }
+}));
+$$(".chip").forEach(c => c.addEventListener("click", () => {
+  $$(".sform input").forEach(i => i.value = c.dataset.q); run({address:c.dataset.q}, true);
+}));
+$("#loc").addEventListener("click", () => {
+  if (!navigator.geolocation) return showError(t("nogeo"));
+  navigator.geolocation.getCurrentPosition(
+    p => run({lat:p.coords.latitude, lon:p.coords.longitude}, false),
+    () => showError(t("denied")));
+});
+
+function showError(msg){ $("#state").innerHTML = `<div class="err" role="alert">${esc(msg)}</div>`; }
+function renderEmpty(){ $("#state").innerHTML = `<div class="empty">${esc(t("empty"))}</div>`; }
+
+async function run(body, scroll){
+  const btns = $$(".sform .btn"); btns.forEach(b => { b.disabled = true; b.textContent = t("checking"); });
+  $("#state").innerHTML = `<div class="empty">${esc(t("loading"))}</div>`;
+  if (scroll) $("#app").scrollIntoView({behavior:"smooth", block:"start"});
+  try{
+    const r = await fetch("/predict",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail || "");
+    last = data; render(data, true);
+  }catch(err){
+    showError(err.message === "Address not found" ? t("notfound") : (err.message || t("generic")));
+  }finally{ btns.forEach(b => { b.disabled = false; b.textContent = t("check"); }); }
+}
+
+function render(d, fly){
+  if (marker) marker.remove();
+  marker = L.marker([d.lat,d.lon],{icon:pinIcon}).addTo(map);
+  if (fly) map.flyTo([d.lat,d.lon], Math.max(map.getZoom(),13), {duration:.8});
+
+  const pct = Math.round(d.probability*100);
+  const maxImp = Math.max(...d.top_factors.map(f => Math.abs(f.importance)), 1e-9);
+  const names = STR[lang].f;
+  const factors = d.top_factors.map(f => {
+    const w = Math.max(4, Math.round(Math.abs(f.importance)/maxImp*100));
+    return `<li><span>${esc(names[f.feature] || f.feature)}</span><span class="v">${esc(fmt(f.value))}</span><span class="bar"><i style="width:${w}%"></i></span></li>`;
+  }).join("");
+
+  const notes = [];
+  if (d.trained_on_demo_data) notes.push(`<div class="notice warn" role="alert">${esc(t("demo"))}</div>`);
+  if (d.feature_source === "nearby_wells") {
+    notes.push(`<div class="notice info">${esc(t("nearby").replace("{n}", d.n_neighbors).replace("{km}", d.nearest_km))}</div>`);
+  } else if (!d.features_are_real) {
+    notes.push(`<div class="notice warn">${esc(t("placeholder"))}</div>`);
+  }
+
+  const title = d.address ? d.address.split(",").slice(0,2).join(",") : t("selected");
+  $("#state").innerHTML = `
+    <div class="where"><h2>${esc(title)}</h2>
+      <p>${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}</p></div>
+    <div class="result">
+      <div class="pwrap" role="img" aria-label="${pct}%">
+        <div class="profile">
+          <div class="hole"><div class="wat" id="wat"></div></div>
+          <div class="lvl" style="bottom:${T_HIGH*100}%"><i>${esc(t("High"))}</i></div>
+          <div class="lvl" style="bottom:${T_MID*100}%"><i>${esc(t("Medium"))}</i></div>
+        </div>
+      </div>
+      <div>
+        <span class="badge ${esc(d.potential)}">${esc(t(d.potential))} ${esc(t("potential"))}</span>
+        <div class="pct">${pct}%<small>${esc(t("chance"))}</small></div>
+      </div>
+    </div>
+    ${notes.join("")}
+    <h3 class="sec">${esc(t("factors"))}</h3>
+    <ul class="factors">${factors}</ul>
+    <h3 class="sec">${esc(t("before"))}</h3>
+    <ol class="next"><li>${esc(t("n1"))}</li><li>${esc(t("n2"))}</li><li>${esc(t("n3"))}</li></ol>
+    <p class="legal">${esc(t("disclaimer"))}</p>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { const w = $("#wat"); if (w) w.style.height = pct + "%"; }));
+}
+
+applyLang();
+</script>
+</body>
+</html>
